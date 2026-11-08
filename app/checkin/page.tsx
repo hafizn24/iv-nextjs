@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,8 +16,8 @@ type Slot = { id: number; slot_number: string };
 
 export default function CheckInPage() {
   useAuth();
-  const router = useRouter();
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -57,14 +56,25 @@ export default function CheckInPage() {
       setForm((p) => ({ ...p, full_name: ocr.full_name || p.full_name, nric_number: ocr.nric_number || p.nric_number }));
       toast.success("NRIC scanned — please verify the details");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "OCR failed — fill in manually");
+      const msg = err instanceof Error ? err.message : null;
+      toast.error(msg && msg !== "null" ? msg : "Something went wrong");
     } finally {
       setOcrBusy(false);
     }
   }
 
+  function removeImage() {
+    setFile(null);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+    setForm((p) => ({ ...p, nric_image_path: "" }));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.unit_id) return toast.error("Visiting unit is required");
+    if (!form.purpose.trim()) return toast.error("Purpose is required");
     if (!form.nric_image_path) return toast.error("Capture NRIC image first");
     setSubmitting(true);
     try {
@@ -84,7 +94,8 @@ export default function CheckInPage() {
       setForm({ full_name: "", nric_number: "", unit_id: "", purpose: "", parking_slot_id: "", nric_image_path: "" });
       (e.target as HTMLFormElement).reset();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Check-in failed");
+      const msg = err instanceof Error ? err.message : null;
+      toast.error(msg && msg !== "null" ? msg : "Something went wrong");
     } finally {
       setSubmitting(false);
     }
@@ -102,12 +113,17 @@ export default function CheckInPage() {
             <form onSubmit={submit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="image">NRIC Image (camera or file)</Label>
-                <Input id="image" type="file" accept="image/*" capture="environment" onChange={handleImage} />
+                <Input id="image" ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImage} />
                 {ocrBusy && <p className="text-sm text-gray-500">Scanning NRIC…</p>}
                 {file && !ocrBusy && <p className="text-sm text-green-600">Image uploaded ✓</p>}
                 {preview && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={preview} alt="NRIC preview" className="mt-2 max-h-48 rounded border" />
+                  <div className="mt-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={preview} alt="NRIC preview" className="max-h-48 rounded border" />
+                    <Button type="button" variant="outline" size="sm" className="mt-2" onClick={removeImage} disabled={ocrBusy}>
+                      Remove Image
+                    </Button>
+                  </div>
                 )}
               </div>
               <div className="space-y-1.5">
@@ -119,7 +135,7 @@ export default function CheckInPage() {
                 <Input value={form.nric_number} onChange={(e) => setForm({ ...form, nric_number: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Visiting Unit</Label>
+                <Label>Visiting Unit *</Label>
                 <SearchableSelect
                   value={form.unit_id}
                   onValueChange={(v) => setForm({ ...form, unit_id: v })}
@@ -131,8 +147,8 @@ export default function CheckInPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Purpose</Label>
-                <Input value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
+                <Label>Purpose *</Label>
+                <Input value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} required />
               </div>
               <div className="space-y-1.5">
                 <Label>Parking Slot (optional)</Label>
@@ -147,9 +163,6 @@ export default function CheckInPage() {
               <div className="flex gap-2">
                 <Button type="submit" disabled={submitting || ocrBusy}>
                   {submitting ? "Saving..." : "Check In"}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => router.push("/visitors")}>
-                  Visitors
                 </Button>
               </div>
             </form>

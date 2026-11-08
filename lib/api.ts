@@ -47,7 +47,11 @@ export async function api(path: string, options: RequestInit = {}) {
     throw new Error("Session expired");
   }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
-  if (!res.ok) throw new Error((data as { detail?: string })?.detail || JSON.stringify(data) || res.statusText);
+  if (!res.ok) {
+    const detail = (data as { detail?: string })?.detail;
+    const message = detail || (data != null ? JSON.stringify(data) : null) || res.statusText;
+    throw new Error(!message || message === "null" ? "Something went wrong" : message);
+  }
   return data;
 }
 
