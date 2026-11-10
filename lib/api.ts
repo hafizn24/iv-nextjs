@@ -49,6 +49,15 @@ export async function api(path: string, options: RequestInit = {}) {
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
     const detail = (data as { detail?: string })?.detail;
+    if (
+      res.status === 403 &&
+      typeof detail === "string" &&
+      /invalid or expired token|authentication credentials were not provided|user not found/i.test(detail)
+    ) {
+      clearAuth();
+      window.location.href = "/login";
+      throw new Error("Session expired");
+    }
     const message = detail || (data != null ? JSON.stringify(data) : null) || res.statusText;
     throw new Error(!message || message === "null" ? "Something went wrong" : message);
   }
